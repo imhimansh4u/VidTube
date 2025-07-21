@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# environment variables
+.env
+
+# logs
+logs/
+*.log
+
+# temp uploads (optional)
+public/temp/
+
+# IDE/editor specific
+.vscode/
+.DS_Store
