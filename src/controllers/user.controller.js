@@ -62,9 +62,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const coverLocalPath = req.files?.coverImage?.[0]?.path; // For the cover image
 
-  // if (!avatarLocalPath) {
-  //   throw new ApiError(400, "Avatar file is missing");
-  // }
 
   // Now we will upload the image of avatar and coverimage on cloudnary , because that is where we are saving these images
   let avatar;
@@ -250,4 +247,174 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   }
 });
 
-export { registerUser, loginUser, refreshAccessToken, logoutUser };
+// Below is the functionality to update the password (See its not recovering the password , its updating it)
+
+const updatePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user?._id);
+  // validation that password is correct or not
+  const isPasswordValid = await isPasswordCorrect(currentPassword);
+
+  if (!isPasswordValid) {
+    throw new ApiError(404, "Your current password is Invalid");
+  }
+
+  user.password = newPassword;
+
+  await user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(201, "Your password is updated successfully"));
+});
+
+const currentUser = asyncHandler(async (req, res) => {
+  const currenuserdetails = req.user?._id; // We are able to find req.user due to the auth middleware (remember it bro mere bhai)
+
+  return res
+    .status(200)
+    .json(new ApiResponse(201, currenuserdetails, "Current User Details"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  const { fullname } = req.body; // we will get the fullname from the req to update
+  if (!fullname) {
+    throw new ApiError(400, "Fullname is required");
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        fullname: fullname,
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res.status(200).json(200, user, "fullname is updated");
+});
+
+// Now to update the avatar image
+const updateAvatar = asyncHandler(async (req, res) => {
+  const newavatarlocalpath = req?.files?.newavatar?.[0]?.path;
+  // check
+  if (!newavatarlocalpath) {
+    throw new ApiError(400, "New avatar image file is required");
+  }
+
+  //(find the user)
+  const user = await User.findById(req.user._id);
+  const oldavatar = user.avatar;
+  const oldavatarpath = oldavatar?.public_id;
+
+  // Now uplaod the newAvatar image on cloudinary
+  let newavatar;
+  try {
+    newavatar = await uploadOnCloudinary(newavatarlocalpath); // newavatar will be a complex object containing information about the url , public_id and other things for that user
+    console.log("The avatar image is uploaded succesfully", newavatar);
+  } catch (error) {
+    console.log("Error while uploading the image", error);
+    throw new ApiError(
+      400,
+      "Error while uploading the avatar image onto the cloudinary"
+    );
+  }
+
+  const updateduser = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        avatar: newavatar,
+      },
+    },
+    { new: true }
+  );
+  //  delete the avatar image from the cloudinary which is already associated with this user
+
+  try {
+    if (oldavatar) {
+      await deleteFromCloudinary(oldavatarpath);
+      console.log("Old avatar image is deleted succesfully");
+    }
+  } catch (error) {
+    console.log("Error while deleting old avatar from cloudinary ", error);
+  }
+
+  res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        updateduser,
+        "The avatar image is uploaded sucessfully"
+      )
+    );
+});
+
+// To update the cover image
+const updateCoverImage = asyncHandler(async (req, res) => {
+  // grab the new cover image
+  const newCoverImagelocalPath = req?.files?.newCoverImage?.[0]?.path;
+  // 2. Validate that a file was actually provided
+  if (!newCoverImagelocalPath) {
+    throw new ApiError(400, "New cover image file is required");
+  }
+  const user = await User.findById(req?.user._id);
+  const oldCoverImage = user?.coverImage;
+  const oldcoverImagePublicId = user?.coverImage?.public_id;
+  // Now uplaod the newCoverImage to the cloudinary
+  let newCoverImage;
+  try {
+    newCoverImage = await uploadOnCloudinary(newCoverImagelocalPath);
+    console.log("The new Cover Image is uploaded successfully on cloudinary");
+  } catch (error) {
+    console.log(
+      "Error while uplaoding the new Cover Image on cloudinary",
+      error
+    );
+    throw new ApiError(400, "Failed to uplaod new Cover Image");
+  }
+  if (!newCoverImage.url) {
+    throw new ApiError(500, "Something went wrong");
+  }
+  //Now update the new Cover Image associated with the user
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        coverImage: newCoverImage,
+      },
+    },
+    { new: true }
+  );
+  //Now delete the old cover image uploaded on the cloudinary only if new CoverImage is uploaded on cloudinary as well as updated on the platform
+
+  try {
+    if (oldCoverImage) {
+      await deleteFromCloudinary(oldcoverImagePublicId);
+      console.log("Old Cover Image is Deleted Successfully");
+    }
+  } catch (error) {
+    console.log(
+      "Failed to delete the old cover image from the cloudinary ",
+      error
+    );
+  }
+
+  res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, "Cover Image updated Succesfully"));
+});
+
+export {
+  registerUser,
+  loginUser,
+  refreshAccessToken,
+  logoutUser,
+  updateAvatar,
+  updateAccountDetails,
+  updatePassword,
+  updateCoverImage,
+};
