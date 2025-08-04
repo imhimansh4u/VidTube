@@ -48,5 +48,4 @@ router
 router.route("/updatePassword").put(updatePassword);
 // Route to update the Account Details
 router.route("/updateAccountDetails").put(updateAccountDetails);
-
 export default router;
