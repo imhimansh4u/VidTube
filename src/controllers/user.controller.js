@@ -24,7 +24,6 @@ const generateAccessAndRefreshToken = async (userId) => {
     await user.save({ validateBeforeSave: false }); //This disables the Mongoose validation checks just for this save operation.
     return { accessToken, refreshToken };
   } catch (error) {
-    // 👇 THIS IS THE CRUCIAL CHANGE 👇
     console.error("ERROR IN TOKEN GENERATION:", error);
     throw new ApiError(
       500,
@@ -61,7 +60,6 @@ const registerUser = asyncHandler(async (req, res) => {
   // we named it as avatar because in user.routes.js , while recieving the image , there we named it as avatar
 
   const coverLocalPath = req.files?.coverImage?.[0]?.path; // For the cover image
-
 
   // Now we will upload the image of avatar and coverimage on cloudnary , because that is where we are saving these images
   let avatar;
@@ -254,7 +252,7 @@ const updatePassword = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user?._id);
   // validation that password is correct or not
-  const isPasswordValid = await isPasswordCorrect(currentPassword);
+  const isPasswordValid = await user.isPasswordCorrect(currentPassword);
 
   if (!isPasswordValid) {
     throw new ApiError(404, "Your current password is Invalid");
@@ -266,15 +264,17 @@ const updatePassword = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(201, "Your password is updated successfully"));
+    .json(new ApiResponse(200, "Your password is updated successfully"));
 });
 
 const currentUser = asyncHandler(async (req, res) => {
-  const currenuserdetails = req.user?._id; // We are able to find req.user due to the auth middleware (remember it bro mere bhai)
-
+  const currentuserID = req.user?._id; // We are able to find req.user due to the auth middleware (remember it bro mere bhai)
+  const currentUserDetails = await User.findById(currentuserID).select(
+    "-password -refreshToken"
+  );
   return res
     .status(200)
-    .json(new ApiResponse(201, currenuserdetails, "Current User Details"));
+    .json(new ApiResponse(201, currentUserDetails, "Current User Details"));
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -298,7 +298,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
 // Now to update the avatar image
 const updateAvatar = asyncHandler(async (req, res) => {
-  const newavatarlocalpath = req?.files?.newavatar?.[0]?.path;
+  const newavatarlocalpath = req?.file?.path;
   // check
   if (!newavatarlocalpath) {
     throw new ApiError(400, "New avatar image file is required");
@@ -326,7 +326,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
     req.user._id,
     {
       $set: {
-        avatar: newavatar,
+        avatar: newavatar.secure_url,
       },
     },
     { new: true }
@@ -356,7 +356,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
 // To update the cover image
 const updateCoverImage = asyncHandler(async (req, res) => {
   // grab the new cover image
-  const newCoverImagelocalPath = req?.files?.newCoverImage?.[0]?.path;
+  const newCoverImagelocalPath = req?.file?.path;
   // 2. Validate that a file was actually provided
   if (!newCoverImagelocalPath) {
     throw new ApiError(400, "New cover image file is required");
@@ -384,7 +384,7 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     req.user._id,
     {
       $set: {
-        coverImage: newCoverImage,
+        coverImage: newCoverImage.secure_url,
       },
     },
     { new: true }
@@ -408,28 +408,30 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedUser, "Cover Image updated Succesfully"));
 });
 
-const getUserChannelProfile = asyncHandler(async(req,res)=>{
-  const {username}  = req.params;
-  if(!username?.trim()){
-    throw new ApiError(400,"Username is required");
+// In the below code we can fetch the information about our own channel or any other person channels also (based on the username we get in the url)
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is required");
   }
   const channel = await User.aggregate([
     {
       $match: {
-        username: username?.toLowerCase(),
+        username: username?.toLowerCase(), //We use `.toLowerCase()` to make the search case-insensitive. So, "TechGuru" and "techguru" will both find the same user.
       },
     },
+    // this stage will give the details of all the subscribers of (username)
     {
       $lookup: {
         from: "subscriptions",
         localField: "_id",
-        foreignField: "channel", // We will match the _id from User to channel of subscription (to get the who have subscribed to you)
+        foreignField: "channel",
         as: "subscribers",
       },
     },
+    // This stage will give the details of all the channels which (user has subscribed (whose username we have found from the url))
     {
       $lookup: {
-        // This will give the details of all those channels which i have subscribed
         from: "subscriptions",
         localField: "_id",
         foreignField: "subscriber",
@@ -446,36 +448,68 @@ const getUserChannelProfile = asyncHandler(async(req,res)=>{
         },
         isSubscribed: {
           $cond: {
-            if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
             then: true,
-            else: false
-          }
-        }
+            else: false,
+          },
+        },
       },
     },
     {
       // Project only the necessary data
       $project: {
         fullname: 1,
-        username : 1,
-        avatar : 1,
-        coverImage:1,
-        ChannelsSubscribedToCount:1,
-        isSubscribed:1,
-        email:1,
-    
-      }
-    }
+        username: 1,
+        avatar: 1,
+        coverImage: 1,
+        ChannelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        email: 1,
+        subscribersCount : 1,
+      },
+    },
   ]);
-  if(!channel?.length){
-    throw new ApiError(404,"Channel not found");
+  // The `aggregate` function always returns a list (an array). If the list is empty, no channel was found.
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel not found");
   }
 
-  return res.
-    status(200).json(new ApiResponse(
-      200,channel[0],"Channel profile fetched succesfully"
-    ))
-})
+  return res.status(200).json(
+    new ApiResponse(200, channel[0], "Channel profile fetched succesfully") //// We send the first (and only) item from the `channel` list. cahnnel[0]
+  );
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  // The Below written code will do a left outer join of User and videos and return whole thing for any perticular user
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user?._id), // We cannot directly write req.user?._id because mongoose will treat it as a string and try to find the _id of this name , we have to pass the original id which is done be written code
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "WatchHistory",
+      },
+    },
+  ]);
+  // // The `aggregate` function always returns a list (an array). If the list is empty, no channel was found.
+  if (!user?.length) {
+    return new ApiError(400, "Failed to get the Users watch History Details");
+  }
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0]?.WatchHistory,
+        "Watch History fetched succesfully"
+      )
+    );
+});
 
 export {
   registerUser,
@@ -486,4 +520,7 @@ export {
   updateAccountDetails,
   updatePassword,
   updateCoverImage,
+  getUserChannelProfile,
+  getWatchHistory,
+  currentUser,
 };

@@ -7,6 +7,10 @@ import {
   updateCoverImage,
   updateAccountDetails,
   updatePassword,
+  refreshAccessToken,
+  currentUser,
+  getUserChannelProfile,
+  getWatchHistory,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middlewares.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -34,18 +38,24 @@ router.route("/logout").post(verifyJWT, logoutUser); // Here verifyJWT is a midd
 // route to update the avatar image
 router
   .route("/updateavatar")
-  .put(upload.fields([{ name: "newavatar", maxCount: 1 }]), updateAvatar);
+  .patch(verifyJWT,upload.single("newavatar"), updateAvatar); // You can also use here upload.single() as we are uploading only single file here
 
 //Route to update the new Cover Image
 router
   .route("/updateCoverImage")
-  .put(
-    upload.fields([{ name: "newCoverImage", maxCount: 1 }]),
-    updateCoverImage
-  );
+  .patch(verifyJWT, upload.single("newCoverImage"), updateCoverImage);
 
-// Roouter to update the password
-router.route("/updatePassword").put(updatePassword);
+// Router to update the password
+router.route("/update-Password").patch(verifyJWT,updatePassword);
 // Route to update the Account Details
-router.route("/updateAccountDetails").put(updateAccountDetails);
+router.route("/update-Account-Details").patch(verifyJWT,updateAccountDetails);
+// Route to refresh the access token
+router.route("/refresh-token").post(refreshAccessToken); 
+
+// Route to get the current user 
+router.route("/current-user").get(verifyJWT,currentUser);
+//Route to get the user channel details
+router.route("/c/:username").get(verifyJWT, getUserChannelProfile);
+//Route to get the watch history
+router.route("/Watch-History").get(verifyJWT,getWatchHistory); 
 export default router;
