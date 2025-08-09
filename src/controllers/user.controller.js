@@ -84,8 +84,8 @@ const registerUser = asyncHandler(async (req, res) => {
   try {
     const newuser = await User.create({
       fullname,
-      avatar: avatar.url,
-      coverImage: coverImage?.url || "",
+      avatar: avatar.secure_url,
+      coverImage: coverImage?.secure_url || "",
       email,
       password,
       username: username.toLowerCase(),
@@ -108,7 +108,7 @@ const registerUser = asyncHandler(async (req, res) => {
       .json(new ApiResponse(201, createdUser, "user registered succesfully"));
   } catch (error) {
     console.log("Error while registering the user", error);
-    if (avatar) {
+    if (avatar) {            // This part means that if we anyhow failed to register , then delete the files from cloudianry
       await deleteFromCloudinary(avatar.public_id);
     }
     if (coverImage) {
