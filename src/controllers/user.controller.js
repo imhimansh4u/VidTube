@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import {
   uploadOnCloudinary,
   deleteFromCloudinary,
+  getPublicIdFromUrl,
 } from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
@@ -307,7 +308,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
   //(find the user)
   const user = await User.findById(req.user._id);
   const oldavatar = user.avatar;
-  const oldavatarpath = oldavatar?.public_id;
+
 
   // Now uplaod the newAvatar image on cloudinary
   let newavatar;
@@ -330,12 +331,13 @@ const updateAvatar = asyncHandler(async (req, res) => {
       },
     },
     { new: true }
-  );
+  ).select("-password");
   //  delete the avatar image from the cloudinary which is already associated with this user
 
   try {
     if (oldavatar) {
-      await deleteFromCloudinary(oldavatarpath);
+      const toBeDeleted = getPublicIdFromUrl(oldavatar);
+      await deleteFromCloudinary(toBeDeleted);
       console.log("Old avatar image is deleted succesfully");
     }
   } catch (error) {
@@ -363,7 +365,6 @@ const updateCoverImage = asyncHandler(async (req, res) => {
   }
   const user = await User.findById(req?.user._id);
   const oldCoverImage = user?.coverImage;
-  const oldcoverImagePublicId = user?.coverImage?.public_id;
   // Now uplaod the newCoverImage to the cloudinary
   let newCoverImage;
   try {
@@ -388,12 +389,13 @@ const updateCoverImage = asyncHandler(async (req, res) => {
       },
     },
     { new: true }
-  );
+  ).select("-password");
   //Now delete the old cover image uploaded on the cloudinary only if new CoverImage is uploaded on cloudinary as well as updated on the platform
 
   try {
     if (oldCoverImage) {
-      await deleteFromCloudinary(oldcoverImagePublicId);
+      const toBeDeleted = getPublicIdFromUrl(oldCoverImage);
+      await deleteFromCloudinary(toBeDeleted);
       console.log("Old Cover Image is Deleted Successfully");
     }
   } catch (error) {
