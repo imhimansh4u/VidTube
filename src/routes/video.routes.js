@@ -1,12 +1,18 @@
 import { Router } from "express";
 import {upload} from "../middlewares/multer.middlewares.js"
-import {publishAVideo} from "../controllers/video.controller.js"
+import {
+  publishAVideo,
+  getVideoById,
+  updateVideo,
+} from "../controllers/video.controller.js";
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
 
 const router = Router();
 
 router.use(verifyJWT); // This will use verfiyJWT in all the routes
+
+// To publish any Video
 router.route("/publish").post(
   upload.fields([
     {
@@ -20,5 +26,10 @@ router.route("/publish").post(
   ]),
   publishAVideo
 );
+// TO get the video by its ID 
+router.route("/V/:videoId").get(getVideoById);
+
+// To update the Video Details
+router.route("/U/:videoId").patch(upload.single("NewThumbnail"), updateVideo);
 
 export default router;
