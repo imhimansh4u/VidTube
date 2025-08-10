@@ -43,5 +43,11 @@ const deleteFromCloudinary = async (publicId) => {
     return null;
   }
 };
+function getPublicIdFromUrl(url) {
+  const parts = url.split("/");
+  const fileWithExt = parts[parts.length - 1]; // e.g., "image_name.jpg"
+  const fileName = fileWithExt.split(".")[0]; // e.g., "image_name"
+  return fileName;
+}
 
-export { uploadOnCloudinary , deleteFromCloudinary};
+export { uploadOnCloudinary , deleteFromCloudinary,getPublicIdFromUrl};
