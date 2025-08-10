@@ -171,9 +171,69 @@ const updateVideo = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, video, "All details Updated"));
 });
 
+
+//TODO: delete video 
 const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
-  //TODO: delete video
+  
+  const video = await Video.findById(videoId);
+  if(!video){
+    console.log(`Video with videoId ${videoId} is not found`);
+    throw new ApiError(404 , "No such Video Found");
+  }
+  const videoFile = video.videoFile;
+  const thumbnail = video.thumbnail;
+  const owner = video.owner;
+  // Only give permission to delete the video if he is the owner of that video 
+  if(req.user?._id.toString() !== owner.toString()){
+    console.log("You are not authorized to delete this video");
+    throw new ApiError(403,"You are not the owner of this video,You cant delete it");
+  } 
+  let isDeleted;
+  try {
+    isDeleted = await Video.deleteOne({ _id: videoId }); // deleteOne returns object containing { acknowledged: true, deletedCount: 1 }
+    if (isDeleted.deletedCount === 1) {
+      console.log("Video Deleted Succesfully");
+    }
+    else{
+      console.log("Failed to delete the Video");
+      throw new ApiError(400,"Failed to delete the Video");
+    }
+  } catch (error) {
+    console.log("Failed to delete the video details from database", error);
+    throw new ApiError(400,"Failed to delete the Video: ");
+    
+  }
+  // Now if the Video is deleted Succesfully delete the old video and its thumbnail
+  try {
+    const toBeDeleted = getPublicIdFromUrl(videoFile);
+    const isDeleted = await deleteFromCloudinary(toBeDeleted);
+    if(isDeleted){
+      console.log("Video file is succesfully deleted: ");
+    }
+    else{
+      console.log("Failed to delete:");
+    }
+  } catch (error) {
+    console.log("Failed to delete the video from Cloudinary ",error);
+  }
+  // Now similarly delete the Video Thumbmnail  
+  try {
+    const toBeDeleted = getPublicIdFromUrl(thumbnail);   // extract the Public Id from the URL 
+    const isDeleted = await deleteFromCloudinary(toBeDeleted);
+    if(isDeleted){
+      console.log("Thumbnail is deleted Succesfully : ");
+    }
+    else{
+      console.log("Failed to delete thumbnail from CLoudinary");
+      
+    }
+  } catch (error) {
+      console.log("Failed to delete Video Thumbnail from Cloudinary");
+  }
+  return res
+        .status(200)
+        .json(new ApiResponse(200,null,"Video is deleted Succesfully from database"));
 });
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
