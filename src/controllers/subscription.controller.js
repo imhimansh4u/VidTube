@@ -30,11 +30,11 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     // if isSubscribed , it means the user has subscribed the channel , so we have to delete the document to unsubscribe 
     await Subscription.findByIdAndDelete(isSubscribed._id);
     //Now also remember to delete the subscription count of that channel
-    updatedChannel = User.findByIdAndUpdate(
-      channelId, 
-      {  $inc: { subscribersCount: -1 },},
-      {new : true} // It will return the Updated Document
-    );
+    updatedChannel = await User.findByIdAndUpdate(
+      channelId,
+      { $inc: { subscribersCount: -1 } },
+      { new: true } // It will return the Updated Document
+    ).select("-password -refreshToken -email -watchHistory");
     responseMessage = "Channel Unsubscribed Succesfully";
   }
   else{
@@ -45,11 +45,11 @@ const toggleSubscription = asyncHandler(async (req, res) => {
       channel : channelId,
     });
     // Now we also need to update the total subscribers count 
-     updatedChannel = User.findByIdAndUpdate(
-      channelId,
-      {$inc : {subscribersCount : 1}},
-      {new:true}
-     );
+     updatedChannel = await User.findByIdAndUpdate(
+       channelId,
+       { $inc: { subscribersCount: 1 } },
+       { new: true }
+     ).select("-password -refreshToken -email -watchHistory");
      responseMessage = "Channel Subscribed Succesfully";
   }
 
@@ -67,7 +67,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
 });
 
 // controller to return subscriber list of a channel
-const getUserChannelSubscribers = asyncHandler(async (req, res) => {
+const getUserChannelSubscribers = asyncHandler(async (req, res) => {  
   const {channelId} = req.params;
   const channel = await User.findById(channelId);
   if(!channel){
@@ -98,7 +98,7 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
         username: "$SubscriberDetails.username",
         avatar: "$SubscriberDetails.avatar",
         coverImage: "$SubscriberDetails.coverImage",
-        fullName: "$SubscriberDetails.fullName",
+        fullname: "$SubscriberDetails.fullname",
       },
     },
   ]);
@@ -124,11 +124,61 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
 
 // controller to return channel list to which user has subscribed
 const getSubscribedChannels = asyncHandler(async (req, res) => {
-    const { subscriberId } = req.params
-})
+    const { subscriberId } = req.params;
+    
+    if(req.user?._id.toString() !== subscriberId.toString()){
+      throw new ApiError(403,"You are not authorized to access the Content");
+    }
 
-export{
-  toggleSubscription,
-  getUserChannelSubscribers,
+    const AllsubscribedChannel = await Subscription.aggregate([
+      {
+        $match: {
+          subscriber: new mongoose.Types.ObjectId(subscriberId),
+        },
+      },
+      // Next stage will be lookup stage
+      {
+        $lookup: {
+          from: "users",
+          localField: "channel",
+          foreignField: "_id",
+          as: "ChannelsSubscribed",
+        },
+      },
+      // Now Unwind For proper Showcase
+      {
+        $unwind: "$ChannelsSubscribed",
+      },
+      // Now Project Only Important Information
+      {
+        $project: {
+          _id: "$ChannelsSubscribed._id",
+          username: "$ChannelsSubscribed.username",
+          avatar: "$ChannelsSubscribed.avatar",
+          coverImage: "$ChannelsSubscribed.coverImage",
+          fullname: "$ChannelsSubscribed.fullname",
+        },
+      },
+    ]);
+    let returnMessage ;
+    if(AllsubscribedChannel.length === 0){
+      returnMessage = "You have Subscribed 0 Channels. ";
+    }
+    else{
+      returnMessage = "These are the Channels You have Subscribed";
+    }
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            totalChannelsSubscribed: AllsubscribedChannel.length,
+            subscribedChannels: AllsubscribedChannel,
+          },
+          returnMessage
+        )
+      );
+});
 
-}
+export { toggleSubscription, getUserChannelSubscribers, getSubscribedChannels};
