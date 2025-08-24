@@ -5,6 +5,8 @@ import {
   getVideoById,
   updateVideo,
   deleteVideo,
+  togglePublishStatus,
+  getAllVideos,
 } from "../controllers/video.controller.js";
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
@@ -34,5 +36,8 @@ router.route("/V/:videoId").get(getVideoById);
 router.route("/U/:videoId").patch(upload.single("NewThumbnail"), updateVideo);
 // To Delete any Video
 router.route("/D/:videoId").delete(deleteVideo);
-
+// To toggle to isPublished status 
+router.route("/T/:videoId").patch(togglePublishStatus);
+// To get all the Videos 
+router.route("/getAll-Videos").get(getAllVideos);
 export default router;

@@ -14,6 +14,92 @@ import { upload } from "../middlewares/multer.middlewares.js";
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
   //TODO: get all videos based on query, sort, pagination
+
+  // Build the aggregation pipeline
+  const pipeline = [];
+  // The first stage is lookup stage in which we will join the with userId and grab the username(for channel name purpose) to look for the channel
+  pipeline.push({
+    $lookup: {
+      from : "users",
+      localField : "owner",
+      foreignField : "_id",
+      as : "ownerDetails",
+    },
+  });
+
+  // The lookup will add the details of the owner in a array , so unwind (since there will be only on doc in the array it will simply give that in a object type)
+  pipeline.push({
+    $unwind : "$ownerDetails",
+  })
+
+  // the next stage which is match stage
+  const matchStage = {};
+  // if a search query is provided then we will search in the title and description field
+  if (query) {
+    matchStage.$or = [
+      { title: { $regex: query, $options: "i" } },
+      { description: { $regex: query, $options: "i" } },
+      {"ownerDetails.username" : {$regex : query, $options: "i"}},
+    ];
+  }
+
+  // Now check if the userID is provided , then we want only those vdos that belong to that user
+  if (userId) {
+    //firstly that is it a valid userId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, "Invalid user ID format");
+    }
+    matchStage.owner = new mongoose.Types.ObjectId(userId); // in the match stage we have to provide the owner id in mongoose Object type
+  }
+
+  // we only want the vdos which are isPublished
+  matchStage.IsPublished = true;
+
+  // add the matchStage to the pipleline only if has something inside it
+  if (Object.keys(matchStage).length > 0) {
+    pipeline.push({ $match: matchStage });
+  }
+
+  // Now sort stage
+  // We default to sorting by 'createdAt' in descending order (newest first).
+  const sortStage = {};
+  if(sortBy){
+    sortStage[sortBy] = sortType === 'asc' ? 1 : -1;
+  }
+  else{
+    // if no information like sortBy or sortType is mentioned , then by default sort in descending order of createdAt (newwest first)
+    sortStage.createdAt = -1;
+  }
+  pipeline.push({$sort : sortStage});
+
+  // Now project
+  pipeline.push({
+    $project: {
+      "ownerDetails.password": 0,
+      "ownerDetails.email": 0,
+      "ownerDetails.refreshToken": 0,
+      "ownerDetails.watchHistory" : 0,
+    },
+  });
+
+  // Now Next stage,which is pagination stage
+  const options = {
+    page: parseInt(page, 10), // 10 here  specifies that the number should be parsed in base-10(mtlb ki normal decimal number)
+    limit: parseInt(limit, 10), 
+  };
+
+  const videoAggregate = Video.aggregate(pipeline);
+  const videos = await Video.aggregatePaginate(videoAggregate,options);
+  // Now if videoAggreagte is succesfull , simply return the response
+  if(!videos || videos.docs.length === 0){
+    return res
+            .status(200)
+            .json(new ApiResponse(200,{docs:[] , totalDocs:0},"OOps! No videos Found"));
+  }
+  // final response if videos found
+  return res
+          .status(200)
+          .json(new ApiResponse(200,videos,"This are the videos Found"))
 });
 
 const publishAVideo = asyncHandler(async (req, res) => {
@@ -89,7 +175,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
   }
 });
 
-//TODO: get video by id
+//TODO: get video by id (Also users can access only those vdos which are published but owner can access published and unpublished vdos also)
 const getVideoById = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   // find the video
@@ -99,9 +185,14 @@ const getVideoById = asyncHandler(async (req, res) => {
     if (!video) {
       throw new ApiError(404, "Video not found");
     }
+    //NOTES-> After populating the owner is not only _id , it is now a abject coantining _id , username , avatar 
+    const isOwner = (video.owner?._id.toString() === req.user?._id.toString());  
+    if(!video.IsPublished && !isOwner){
+      return res.status(403).json(new ApiResponse(403,null,"You are not authorized to access this vdo"));
+    }
     return res
-      .status(200)
-      .json(new ApiResponse(200, video, "Video is fetched Succesfully"));
+            .status(200)
+            .json(new ApiResponse(200,video,"Video fetched succesfully"));
   } catch (error) {
     console.log("Video not Found ", error);
     throw new ApiError(404, "Video file is not Found ");
@@ -238,6 +329,26 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
 const togglePublishStatus = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
+  // Grab the Video 
+  const video = await Video.findById(videoId);
+  if(!video){
+    console.log("Video is Not found");
+    throw new ApiError(404,"Video is not found"); 
+  }
+  if(req.user?._id.toString() !== video.owner.toString()){
+    console.log("You cant do this");
+    throw new ApiError(403,"You are not authorized to do this");
+  }
+  try {
+    video.IsPublished = !video.IsPublished; 
+    await video.save({validateBeforeSave : false});
+    return res
+            .status(200)
+            .json(new ApiResponse(200,video,"Succesfully toggled the isPublished status"));
+  } catch (error) {
+    console.log("Failed to toggle the Published status",error);
+    throw new ApiError(400,"Failed to toggle Published status"); 
+  }
 });
 
 export {
