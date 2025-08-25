@@ -10,6 +10,7 @@ import {
   uploadOnCloudinary,
 } from "../utils/Cloudinary.js";
 import { upload } from "../middlewares/multer.middlewares.js";
+import { Like } from "../models/like.models.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
@@ -351,6 +352,102 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
   }
 });
 
+const getVideoDetails = asyncHandler(async (req,res)=>{
+  const {videoId} = req.params;
+  // firstly check if video exxists 
+  const video = await Video.findById(videoId);
+  if(!video){
+    console.log("Video not found");
+    throw new ApiError(400,"Video not found");
+  }
+  //Now if the video is found you have to attach the likes count in that video
+  let videoDetails;
+  videoDetails = await Video.aggregate([
+    // Step 1: Match the video
+    {
+      $match: { _id: new mongoose.Types.ObjectId(videoId) },
+    },
+    // next stage -> Attach the owner details
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "ownerDetails",
+      },
+    },
+    // Now unwind
+    {
+      $unwind: "$ownerDetails",
+    },
+    // Now stage for the likes
+    {
+      $lookup: {
+        from: "likes",
+        localField: "_id",
+        foreignField: "video",
+        as: "AllLikes",
+      },
+    },
+    // next stage is to add extra field
+    {
+      $addFields: {
+        totalLikes: {
+          $size: "$AllLikes",
+        },
+      },
+    },
+    {
+      $project: {
+        AllLikes: 0,
+      },
+    },
+    // Now next stage is to add the comments details
+    {
+      $lookup: {
+        from: "comments",
+        localField: "_id",
+        foreignField: "video",
+        as: "comments",
+      },
+    },
+
+    // Now also count the total Comments
+    {
+      $addFields: {
+        totalComments: {
+          $size: "$comments",
+        },
+      },
+    },
+    // Now project the all necessary information
+    {
+      $project: {
+        comments: 0,
+        title: 1,
+        description: 1,
+        videoFile: 1,
+        thumbnail: 1,
+        totalLikes: 1,
+        "ownerDetails._id": 1,
+        "ownerDetails.username": 1,
+        "ownerDetails.avatar": 1,
+        totalComments: 1,
+      },
+    },
+  ]);
+
+  if(!videoDetails || videoDetails.length === 0){
+    return res
+            .status(400)
+            .json(new ApiResponse(400,null,"Video is not Found"));
+  }
+
+  return res
+          .status(200)
+          .json(new ApiResponse(200,videoDetails,"Here is the Full detail of the Video"));
+})
+
 export {
   getAllVideos,
   publishAVideo,
@@ -358,4 +455,5 @@ export {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
+  getVideoDetails,
 };

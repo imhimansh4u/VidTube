@@ -7,6 +7,7 @@ import {
   deleteVideo,
   togglePublishStatus,
   getAllVideos,
+  getVideoDetails,
 } from "../controllers/video.controller.js";
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
@@ -40,4 +41,6 @@ router.route("/D/:videoId").delete(deleteVideo);
 router.route("/T/:videoId").patch(togglePublishStatus);
 // To get all the Videos 
 router.route("/getAll-Videos").get(getAllVideos);
+// To get the detail of and Video
+router.route("/getAllDetails").get(getVideoDetails);
 export default router;
