@@ -4,7 +4,8 @@ import { Like } from "../models/like.models.js";
 import { asyncHandler} from "../utils/asyncHandler.js";
 import { Mongoose } from "mongoose";
 import { Video } from "../models/video.models.js";
-import {User} from "../models/user.models.js"
+import {User} from "../models/user.models.js";
+import {Comment} from "../models/comment.models.js";
 
 const toggleVideoLike = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
@@ -67,4 +68,62 @@ const toggleVideoLike = asyncHandler(async (req, res) => {
 });
 
 
-export { toggleVideoLike };
+
+const toggleCommentLike = asyncHandler(async (req, res) => {
+  const { commentId } = req.params;
+  //TODO: toggle like on comment
+  let comment = await Comment.findById(commentId);
+  if(!comment){
+    console.log("Comment not found");
+    
+    throw new ApiError(400,"This comment doesnt exists");
+  }
+
+  const userId = req.user?._id;
+
+  const isLiked = await Like.findOne({
+    comment : commentId,
+    likedby : userId,
+  })
+
+  let responsemessage;
+  
+  
+  if(isLiked){
+    await Like.findByIdAndDelete(isLiked._id);
+    responsemessage = "Comment Unliked Succesfully";
+    comment = await Comment.findByIdAndUpdate(
+      commentId,
+      {$inc : {totalLikes : -1}},
+      {new : true}
+    )
+  }
+  else{
+    await Like.create({
+      comment : commentId,
+      likedby : userId
+    })
+    comment = await Comment.findByIdAndUpdate(
+      commentId,
+      {$inc : {totalLikes : 1}},
+      {new : true}
+    )
+    responsemessage = "Comment Liked Succesfully";
+  }
+  // const totalLikes = await Like.countDocuments({LikeDocId});
+  return res
+          .status(200)
+          .json(new ApiResponse(
+            200,
+            {
+              isLiked : !isLiked,
+              comment,
+            },
+            responsemessage 
+          ))
+
+
+});
+
+
+export { toggleVideoLike, toggleCommentLike };
