@@ -8,6 +8,7 @@ import { User } from "../models/user.models.js";
 import { Comment } from "../models/comment.models.js";
 import mongoose from "mongoose";
 
+// In this controller , you will also get the total likes count on each comment
 const getVideoComments = asyncHandler(async (req, res) => {
   //TODO: get all comments for a video
   const { videoId } = req.params;
@@ -43,7 +44,23 @@ const getVideoComments = asyncHandler(async (req, res) => {
             $unwind: "$owner",
           },
           {
+            $lookup : {
+              from : "likes",
+              localField : "_id",
+              foreignField : "comment",
+              as : "LikesOnComments",
+            }
+          },
+          {
+            $addFields : {
+               totalLikes : {
+                $size : "$LikesOnComments"
+               }
+            }
+          },
+          {
             $project: {
+              totalLikes : 1,
               content: 1,
               video: 1,
               "owner.name": 1,

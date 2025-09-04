@@ -397,11 +397,6 @@ const getVideoDetails = asyncHandler(async (req,res)=>{
         },
       },
     },
-    {
-      $project: {
-        AllLikes: 0,
-      },
-    },
     // Now next stage is to add the comments details
     {
       $lookup: {
@@ -423,7 +418,6 @@ const getVideoDetails = asyncHandler(async (req,res)=>{
     // Now project the all necessary information
     {
       $project: {
-        comments: 0,
         title: 1,
         description: 1,
         videoFile: 1,

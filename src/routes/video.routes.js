@@ -42,5 +42,5 @@ router.route("/T/:videoId").patch(togglePublishStatus);
 // To get all the Videos 
 router.route("/getAll-Videos").get(getAllVideos);
 // To get the detail of and Video
-router.route("/getAllDetails").get(getVideoDetails);
+router.route("/get-V-Details/:videoId").get(getVideoDetails);
 export default router;
