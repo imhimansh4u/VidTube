@@ -440,7 +440,7 @@ const getVideoDetails = asyncHandler(async (req,res)=>{
   return res
           .status(200)
           .json(new ApiResponse(200,videoDetails,"Here is the Full detail of the Video"));
-})
+});
 
 export {
   getAllVideos,
