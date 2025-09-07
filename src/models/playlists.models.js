@@ -20,6 +20,12 @@ const playListSchema = new Schema(
             type : Schema.Types.ObjectId,
             ref : "User",
         },
+        visibility : {
+            type : String,
+            enum: ["private", "public"],
+            default: "private",
+            required : true,
+        }
     },{timestamps : true}
 )
 
