@@ -8,6 +8,7 @@ import {
   togglePublishStatus,
   getAllVideos,
   getVideoDetails,
+  increaseViews,
 } from "../controllers/video.controller.js";
 import {verifyJWT} from "../middlewares/auth.middleware.js"
 
@@ -43,4 +44,6 @@ router.route("/T/:videoId").patch(togglePublishStatus);
 router.route("/getAll-Videos").get(getAllVideos);
 // To get the detail of and Video
 router.route("/get-V-Details/:videoId").get(getVideoDetails);
+// to increase views on Videos
+router.route("/views/:videoId").patch(increaseViews);
 export default router;

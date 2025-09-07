@@ -442,6 +442,44 @@ const getVideoDetails = asyncHandler(async (req,res)=>{
           .json(new ApiResponse(200,videoDetails,"Here is the Full detail of the Video"));
 });
 
+// Increase views on a video
+const increaseViews = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  //  Validate videoId
+  if (!mongoose.Types.ObjectId.isValid(videoId)) {
+    throw new ApiError(400, "Invalid videoId");
+  }
+
+  // Find video and increment views
+  const updatedVideo = await Video.findByIdAndUpdate(
+    videoId,
+    { $inc: { views: 1 } },     // increment views by 1
+    { new: true }               // return updated document
+  );
+
+  //  If video not found
+  if (!updatedVideo) {
+    throw new ApiError(404, "Video not found");
+  }
+
+// Respond with updated video
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { 
+          _id: updatedVideo._id,
+          title: updatedVideo.title,
+          views: updatedVideo.views 
+        },
+        "Video views increased successfully"
+      )
+    );
+});
+
+
 export {
   getAllVideos,
   publishAVideo,
@@ -450,4 +488,5 @@ export {
   deleteVideo,
   togglePublishStatus,
   getVideoDetails,
+  increaseViews,
 };
